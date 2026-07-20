@@ -22,18 +22,17 @@ import backtest_engine
 import metrics
 import walk_forward
 
+USING_REAL_DATA = True   # set this to match whichever data_loader call you use below
+
 
 def main():
+    label = "REAL NSE DATA" if USING_REAL_DATA else "SYNTHETIC DATA (pipeline validation only)"
     print("=" * 70)
-    print("STRATEGY BACKTEST -- SYNTHETIC DATA (pipeline validation, not a")
-    print("performance estimate -- see the note at the end of this run)")
+    print(f"STRATEGY BACKTEST -- {label}")
     print("=" * 70)
 
     print(f"\nUniverse (before liquidity filter): {config.UNIVERSE}")
-    data = data_loader.load_real_data_yfinance(
-    config.UNIVERSE,
-    days=55,
-)
+    data = data_loader.generate_synthetic_data(config.UNIVERSE, n_days=120)
     data = data_loader.apply_liquidity_filter(data)
     print(f"Universe (after liquidity filter):  {list(data.keys())}")
 
@@ -81,16 +80,18 @@ def main():
               f"win_rate={r['win_rate_pct']}%")
 
     print(f"\n{'='*70}")
-    print("IMPORTANT: this entire run used SYNTHETIC random-walk data.")
-    print("Its only job was to prove the pipeline runs correctly end to end --")
-    print("signals fire, regimes classify, position sizing respects both risk")
-    print("and notional caps, costs are charged on every leg, the 5-day max-hold")
-    print("rule is enforced, and metrics/Monte-Carlo/walk-forward all compute.")
-    print("The negative return above is NOT a signal that the strategy is bad --")
-    print("it's a random walk with no real structure to find an edge in, and")
-    print("its unconstrained volatility can produce swings a real, mean-reverting")
-    print("equity market usually wouldn't. Point data_loader.py at real NSE")
-    print("data next; that result is the one worth trusting.")
+    if USING_REAL_DATA:
+        print("This run used REAL NSE data -- these numbers are a real signal,")
+        print("not something to wave away. If total_return_pct and profit_factor")
+        print("are negative, that's the strategy telling you it doesn't have a")
+        print("demonstrated edge with its current parameters on this window --")
+        print("take that seriously before considering live deployment.")
+    else:
+        print("IMPORTANT: this entire run used SYNTHETIC random-walk data.")
+        print("Its only job was to prove the pipeline runs correctly end to end.")
+        print("The result here is NOT a performance estimate. Point")
+        print("data_loader.py at real NSE data next; that result is the one")
+        print("worth trusting.")
     print("=" * 70)
 
     with open("backtest_summary.json", "w") as f:

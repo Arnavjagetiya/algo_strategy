@@ -31,7 +31,15 @@ def true_range(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
 def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
     """Wilder's ATR. alpha = 1/period is mathematically Wilder's smoothing method."""
     tr = true_range(high, low, close)
-    return tr.ewm(alpha=1 / period, adjust=False).mean()
+    atr = tr.ewm(
+        alpha=1 / period,
+        adjust=False
+    ).mean()
+
+    return atr.rolling(
+        2,
+        min_periods=1
+    ).mean()
 
 
 def rsi(close: pd.Series, period: int = 14) -> pd.Series:
@@ -68,7 +76,10 @@ def adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> 
     minus_di = 100 * pd.Series(minus_dm, index=high.index).ewm(alpha=1 / period, adjust=False).mean() / atr_smooth
 
     dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
-    return dx.ewm(alpha=1 / period, adjust=False).mean()
+    adx = dx.ewm(alpha=1 / period, adjust=False).mean()
+
+    # Smooth to reduce noisy regime flips
+    return adx.rolling(3, min_periods=1).mean()
 
 
 def session_vwap(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series) -> pd.Series:
@@ -83,18 +94,33 @@ def session_vwap(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.S
 
 def relative_volume(volume: pd.Series, lookback: int = 20) -> pd.Series:
     """Current bar's volume vs. its own rolling average -- flags participation surges."""
-    avg_vol = volume.rolling(lookback).mean()
+    avg_vol = volume.rolling(
+        lookback,
+        min_periods=lookback // 2
+    ).median()
+
     return volume / avg_vol.replace(0, np.nan)
 
 
 def opening_range(df: pd.DataFrame, minutes: int = 15):
-    """Returns per-day (high, low) of the first `minutes` of each session,
-    broadcast across every bar in that session -- used for breakout confirmation."""
+
     day = pd.Series(df.index.date, index=df.index)
-    session_start = df.groupby(day).apply(lambda g: g.index[0])
-    or_high, or_low = {}, {}
-    for d, start in session_start.items():
-        window = df.loc[start: start + pd.Timedelta(minutes=minutes)]
-        or_high[d] = window["high"].max()
-        or_low[d] = window["low"].min()
-    return day.map(or_high), day.map(or_low)
+
+    or_high = pd.Series(index=df.index, dtype=float)
+    or_low = pd.Series(index=df.index, dtype=float)
+
+    for _, session in df.groupby(day):
+
+        start = session.index[0]
+
+        end = start + pd.Timedelta(minutes=minutes)
+
+        opening = session[session.index < end]
+
+        high = opening["high"].max()
+        low = opening["low"].min()
+
+        or_high.loc[session.index] = high
+        or_low.loc[session.index] = low
+
+    return or_high, or_low

@@ -8,6 +8,8 @@ separation lets you swap signal logic later without touching risk logic.
 -----------------------------------------------------------------------------
 """
 from dataclasses import dataclass, field
+from fileinput import close
+from turtle import position
 import pandas as pd
 
 import config
@@ -48,9 +50,21 @@ def position_size(capital: float, entry_price: float, atr_value: float):
     you don't have. Constraint 2 catches that case.
     """
     risk_amount = capital * config.RISK_PER_TRADE_PCT
-    stop_distance = config.ATR_STOP_MULT * atr_value
-    if stop_distance <= 0 or entry_price <= 0:
+
+    # Dynamic ATR multiplier
+    if atr_value <= 0 or entry_price <= 0:
         return 0, 0.0, 0.0, 0.0
+
+    atr_pct = (atr_value / entry_price) * 100
+
+    if atr_pct >= 2.0:
+        atr_mult = 2.2
+    elif atr_pct >= 1.0:
+        atr_mult = 1.8
+    else:
+        atr_mult = 1.3
+
+    stop_distance = atr_mult * atr_value
 
     risk_based_qty = int(risk_amount // stop_distance)
     max_notional = capital * config.MAX_POSITION_NOTIONAL_PCT
@@ -58,7 +72,7 @@ def position_size(capital: float, entry_price: float, atr_value: float):
     quantity = max(0, min(risk_based_qty, notional_based_qty))
 
     stop_price = entry_price - stop_distance
-    target_price = entry_price + config.REWARD_RISK_RATIO * stop_distance
+    target_price = float("inf")
     return quantity, stop_price, target_price, stop_distance
 
 
@@ -104,11 +118,14 @@ def check_exit(position: Position, bar: pd.Series, current_regime: str, bars_hel
         if high >= r_target:
             return "scale_out", r_target
 
-    if high >= position.target_price:
-        return "target", position.target_price
-
     if position.entry_regime == "TRENDING" and current_regime == "RANGING":
         return "regime_flip", close
+    
+    # Adaptive time stop:
+    # If we've held the trade for at least 2 trading days and it's still
+    # below the entry price, free the capital.
+    if bars_held_days >= 2 and close < position.entry_price:
+        return "time_stop", close
 
     # bars_held_days is 0 on the ENTRY day itself (day_idx[now] - day_idx[entry]).
     # So "this position has touched MAX_HOLDING_DAYS distinct trading days,
@@ -130,4 +147,32 @@ def check_exit(position: Position, bar: pd.Series, current_regime: str, bars_hel
     if calendar_days_held >= 8:
         return "time_stop", close
 
+    # Profit so far
+    profit = close - position.entry_price
+
+    # Move stop to breakeven after +1R
+    if profit >= position.initial_risk_per_share:
+        position.stop_price = max(
+            position.stop_price,
+            position.entry_price
+        )
+
+    # Trail stop after +2R
+    if profit >= 2 * position.initial_risk_per_share:
+        trailing_stop = close - (2.0 * bar["atr"])
+        position.stop_price = max(position.stop_price, trailing_stop)
+    
+    if profit >= 2 * position.initial_risk_per_share and pd.notna(bar["atr"]):
+        trailing_stop = close - (2.0 * bar["atr"])
+        position.stop_price = max(position.stop_price, trailing_stop)
+
+    # Exit if momentum disappears
+    if (
+    position.entry_regime == "TRENDING"
+    and bar["adx"] < 18
+    and profit > 0
+    ):
+        return "adx_exit", close
+
     return None, None
+

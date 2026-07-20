@@ -33,6 +33,8 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out["ema_fast"] = ind.ema(out["close"], config.EMA_FAST)
     out["ema_slow"] = ind.ema(out["close"], config.EMA_SLOW)
+    out["ema_fast_slope"] = out["ema_fast"].diff()
+    out["ema_slow_slope"] = out["ema_slow"].diff()
     out["atr"] = ind.atr(out["high"], out["low"], out["close"])
     out["adx"] = ind.adx(out["high"], out["low"], out["close"], config.ADX_PERIOD)
     out["rsi"] = ind.rsi(out["close"], config.RSI_PERIOD)
@@ -54,36 +56,34 @@ def classify_regime(row) -> str:
     return "NEUTRAL"
 
 
-def trend_long_signal(row, index_row) -> bool:
-    """Breakout continuation, long only. Requires FOUR independent
-    confirmations to line up -- this is what makes it a multi-factor
-    signal rather than a single-indicator crossover:
-      1. EMA alignment (short-term trend is up)
-      2. Price breaking above the opening range (breakout, not just drift)
-      3. Volume confirms real participation, not a thin/false move
-      4. The broader index isn't fighting you (simple regime-alignment filter)
-    """
-    if pd.isna(row["or_high"]) or pd.isna(row["ema_fast"]):
+def trend_long_signal(row, index_row):
+    if pd.isna(row["or_high"]):
         return False
-    ema_aligned = row["ema_fast"] > row["ema_slow"]
-    breakout = row["close"] > row["or_high"]
-    volume_confirms = row["rel_vol"] >= config.REL_VOLUME_TREND_MIN
-    index_supportive = index_row is None or index_row["ema_fast"] > index_row["ema_slow"]
-    return bool(ema_aligned and breakout and volume_confirms and index_supportive)
+
+    if pd.isna(row["ema_fast"]):
+        return False
+
+    return signal_score(row, index_row) >= 8
 
 
-def mean_reversion_long_signal(row) -> bool:
-    """Oversold-bounce, long only:
-      1. RSI confirms oversold conditions
-      2. Price is at/through the lower Bollinger Band (statistically stretched)
-      3. Volume confirms this looks like capitulation, not just drift down
-    """
-    if pd.isna(row["bb_lower"]) or pd.isna(row["rsi"]):
+def mean_reversion_long_signal(row):
+
+    if pd.isna(row["bb_lower"]):
         return False
-    oversold = row["rsi"] < config.RSI_OVERSOLD
-    band_touch = row["close"] <= row["bb_lower"]
-    volume_confirms = row["rel_vol"] >= config.REL_VOLUME_MEANREV_MIN
-    return bool(oversold and band_touch and volume_confirms)
+
+    if row["adx"] >= config.ADX_RANGING_THRESHOLD:
+        return False
+
+    if row["rsi"] > 25:
+        return False
+
+    if row["close"] > row["bb_lower"]:
+        return False
+
+    if row["rel_vol"] < 1.5:
+        return False
+
+    return True
 
 
 def generate_entry_signals(df: pd.DataFrame, index_df: pd.DataFrame = None) -> pd.DataFrame:
@@ -95,6 +95,7 @@ def generate_entry_signals(df: pd.DataFrame, index_df: pd.DataFrame = None) -> p
                      that backtest_engine.py applies before it becomes a trade)
     """
     feats = compute_features(df)
+    feats = feats[feats["close"] >= 100].copy()
     feats["regime"] = feats.apply(classify_regime, axis=1)
 
     signals = []
@@ -108,3 +109,53 @@ def generate_entry_signals(df: pd.DataFrame, index_df: pd.DataFrame = None) -> p
             signals.append(False)
     feats["raw_signal"] = signals
     return feats
+
+def signal_score(row, index_row=None):
+    score = 0
+
+    # Primary trend
+    if (
+        row["ema_fast"] > row["ema_slow"]
+        and row["ema_fast_slope"] > 0
+        and row["ema_slow_slope"] >= 0
+    ):
+        score += 2
+
+    # Strong trend only
+    if row["adx"] >= config.ADX_TRENDING_THRESHOLD + 5:
+        score += 2
+
+    # Above VWAP
+    if row["close"] > row["vwap"]:
+        score += 1
+
+    if (
+        row["close"] > row["or_high"]
+        and row["close"] > row["high"] * 0.995
+    ):
+        score += 2
+
+    # Relative volume
+    if row["rel_vol"] >= 2.0:
+        score += 1
+
+    # Don't chase extended moves
+    atr = row["atr"]
+    if pd.notna(atr):
+        if row["close"] > row["ema_fast"] + 2 * atr:
+            return 0
+
+    # Index confirmation
+    # Index confirmation
+    if index_row is not None:
+        if (
+            index_row["ema_fast"] > index_row["ema_slow"]
+            and index_row["close"] > index_row["vwap"]
+        ):
+            score += 2
+
+    # Reject weak candles
+    if row["close"] < row["open"]:
+        return 0
+
+    return score

@@ -21,22 +21,22 @@ ATR_PCT_MAX = 4.0              # skip stocks that are too explosive / circuit-pr
 
 # ---- Regime detection -----------------------------------------------------
 ADX_PERIOD = 14
-ADX_TRENDING_THRESHOLD = 25    # ADX >= this  -> trending regime -> trend sub-strategy
-ADX_RANGING_THRESHOLD = 20     # ADX <  this  -> ranging regime  -> mean-reversion sub-strategy
+ADX_TRENDING_THRESHOLD = 30    # ADX >= this  -> trending regime -> trend sub-strategy
+ADX_RANGING_THRESHOLD = 18     # ADX <  this  -> ranging regime  -> mean-reversion sub-strategy
 # Between the two thresholds -> NEUTRAL regime -> no new entries (ambiguous, sit out)
 
 # ---- Trend sub-strategy (used only in TRENDING regime) --------------------
-EMA_FAST = 9
-EMA_SLOW = 21
+EMA_FAST = 10
+EMA_SLOW = 30
 OPENING_RANGE_MINUTES = 15     # first 15 minutes of the session defines the opening range
-REL_VOLUME_TREND_MIN = 1.5     # need 1.5x the recent average volume to confirm a breakout
+REL_VOLUME_TREND_MIN = 2.0     # need 1.5x the recent average volume to confirm a breakout
 
 # ---- Mean-reversion sub-strategy (used only in RANGING regime) ------------
 RSI_PERIOD = 14
-RSI_OVERSOLD = 30
+RSI_OVERSOLD = 25
 BOLLINGER_PERIOD = 20
 BOLLINGER_STD = 2.0
-REL_VOLUME_MEANREV_MIN = 1.2
+REL_VOLUME_MEANREV_MIN = 1.5
 
 # ---- Direction ---------------------------------------------------------
 # Long-only by design: an intraday SHORT in the cash segment must be squared
@@ -47,23 +47,23 @@ REL_VOLUME_MEANREV_MIN = 1.2
 ALLOW_SHORTS = False
 
 # ---- Risk management --------------------------------------------------
-RISK_PER_TRADE_PCT = 0.0075    # 0.75% of capital risked per trade (moderate/medium-aggressive)
-ATR_STOP_MULT = 1.5            # stop distance = 1.5x ATR(14)
-REWARD_RISK_RATIO = 2.0        # target distance = 2x the stop distance
-MAX_POSITION_NOTIONAL_PCT = 0.20   # no single position's total value exceeds 20% of capital,
+RISK_PER_TRADE_PCT = 0.0040    # 0.40% of capital risked per trade (moderate/medium-aggressive)
+ATR_STOP_MULT = 1.8            # stop distance = 1.5x ATR(14)
+REWARD_RISK_RATIO = 999.0        # target distance = 2x the stop distance
+MAX_POSITION_NOTIONAL_PCT = 0.15   # no single position's total value exceeds 20% of capital,
                                     # regardless of what pure risk-based sizing would otherwise buy
                                     # (with MAX_CONCURRENT_POSITIONS=4, this caps total deployment
                                     # at 80% of capital even in the worst case, leaving a buffer)
-PARTIAL_SCALE_OUT_R = 1.0      # take partial profit once price has moved 1x risk in your favor
-PARTIAL_SCALE_OUT_FRACTION = 0.5   # ...scale out 50% there, move stop to breakeven on the rest
+PARTIAL_SCALE_OUT_R = 2.0      # take partial profit once price has moved 1x risk in your favor
+PARTIAL_SCALE_OUT_FRACTION = 0.40   # ...scale out 50% there, move stop to breakeven on the rest
 
-MAX_CONCURRENT_POSITIONS = 4       # keeps this monitorable for one person
-MAX_PORTFOLIO_HEAT_PCT = 0.03      # sum of *open risk* across all positions, capped at 3% of capital
-DAILY_LOSS_LIMIT_PCT = 0.02        # kill switch: stop opening new trades after -2% for the day
+MAX_CONCURRENT_POSITIONS = 3       # keeps this monitorable for one person
+MAX_PORTFOLIO_HEAT_PCT = 0.025      # sum of *open risk* across all positions, capped at 3% of capital
+DAILY_LOSS_LIMIT_PCT = 0.015        # kill switch: stop opening new trades after -2% for the day
 
 # ---- Holding period ------------------------------------------------------
 INTRADAY_SQUARE_OFF_TIME = "15:15"   # square off pure-intraday signals by 3:15pm (avoid the close auction)
-MAX_HOLDING_DAYS = 5                  # hard time-stop -- implements your "max weekly holding" rule
+MAX_HOLDING_DAYS = 4                  # hard time-stop -- implements your "max weekly holding" rule
 
 # ---- Transaction costs (India, cash equity segment) ------------------------
 # These are current at time of writing but STT/stamp duty are set by the

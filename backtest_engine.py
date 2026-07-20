@@ -107,7 +107,14 @@ def run_backtest(raw_data: dict = None, starting_capital: float = None,
             reason, exit_price = rm.check_exit(position, bar, bar["regime"], held_days)
 
             if reason == "scale_out":
-                sell_qty = int(position.quantity * config.PARTIAL_SCALE_OUT_FRACTION)
+                sell_qty = max(
+                    1,
+                    int(position.quantity * config.PARTIAL_SCALE_OUT_FRACTION),
+                )
+
+                if sell_qty >= position.quantity:
+                    sell_qty = position.quantity - 1
+
                 if sell_qty <= 0:
                     continue
                 same_day = ts.date() == position.entry_time.date()
@@ -124,7 +131,7 @@ def run_backtest(raw_data: dict = None, starting_capital: float = None,
                 })
                 continue
 
-            if reason in ("stop", "target", "regime_flip", "time_stop"):
+            if reason in ("stop", "target", "regime_flip", "time_stop", "adx_exit"):
                 same_day = ts.date() == position.entry_time.date()
                 proceeds = exit_price * position.quantity - costs.exit_cost(exit_price, position.quantity, same_day)
                 cash += proceeds
@@ -195,6 +202,8 @@ def run_backtest(raw_data: dict = None, starting_capital: float = None,
 
                 bar = df.loc[ts]
                 entry_price = bar["open"]
+                if pd.isna(prev_bar["atr"]):
+                    continue
                 qty, stop, target, risk_per_share = rm.position_size(equity_for_sizing, entry_price, prev_bar["atr"])
                 if qty <= 0:
                     continue
@@ -204,21 +213,33 @@ def run_backtest(raw_data: dict = None, starting_capital: float = None,
                 cash -= entry_cash_out
 
                 open_positions[symbol] = rm.Position(
-                    symbol=symbol, entry_time=ts, entry_price=entry_price,
-                    quantity=qty, stop_price=stop, target_price=target,
-                    initial_risk_per_share=risk_per_share, entry_regime=prev_bar["regime"],
+                    symbol=symbol,
+                    entry_time=ts,
+                    entry_price=entry_price,
+                    quantity=qty,
+                    stop_price=stop,
+                    target_price=target,
+                    initial_risk_per_share=risk_per_share,
+                    entry_regime=prev_bar["regime"],
+                    original_quantity=qty,
+                    total_entry_cash_out=entry_cash_out,
+                    total_exit_cash_in=0.0,
                 )
-                open_positions[symbol].original_quantity = qty
-                open_positions[symbol].total_entry_cash_out = entry_cash_out
-                open_positions[symbol].total_exit_cash_in = 0.0
 
         # ---- 3. Mark-to-market equity for the curve, and next bar's sizing basis ----
-        unrealized = 0.0
+        position_value = 0.0
+
         for symbol, position in open_positions.items():
             df = feats[symbol]
-            if ts in df.index:
-                unrealized += (df.loc[ts, "close"] - position.entry_price) * position.quantity
-        equity_for_sizing = cash + unrealized
+
+            if ts not in df.index:
+                continue
+
+            position_value += (
+                df.loc[ts, "close"] * position.quantity
+            )
+
+        equity_for_sizing = cash + position_value
         equity_points.append((ts, equity_for_sizing))
 
     equity_curve = pd.Series({t: v for t, v in equity_points}).sort_index()

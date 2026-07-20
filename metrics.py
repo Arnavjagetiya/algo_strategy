@@ -49,6 +49,46 @@ def compute_metrics(equity_curve: pd.Series, trade_log: list, starting_capital: 
     gross_profit = sum(t["pnl"] for t in wins)
     gross_loss = abs(sum(t["pnl"] for t in losses))
     profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
+    expectancy = (
+        (win_rate / 100.0) * avg_win
+        + (1 - win_rate / 100.0) * avg_loss
+    ) if n_trades else 0.0
+    avg_holding = (
+        np.mean([t["holding_days"] for t in closed_trades])
+        if closed_trades
+        else 0.0
+    )
+    largest_win = max(
+        (t["pnl"] for t in closed_trades),
+        default=0.0
+    )
+
+    largest_loss = min(
+        (t["pnl"] for t in closed_trades),
+        default=0.0
+    )
+
+    max_consecutive_losses = 0
+    current_losses = 0
+
+    for trade in closed_trades:
+
+        if trade["pnl"] <= 0:
+            current_losses += 1
+            max_consecutive_losses = max(
+                max_consecutive_losses,
+                current_losses,
+            )
+        else:
+            current_losses = 0
+
+    net_profit = equity_curve.iloc[-1] - starting_capital
+
+    recovery_factor = (
+        net_profit / abs(max_dd_pct)
+        if max_dd_pct != 0
+        else float("nan")
+    )
 
     return {
         "total_return_pct": round(total_return_pct, 2),
@@ -62,6 +102,19 @@ def compute_metrics(equity_curve: pd.Series, trade_log: list, starting_capital: 
         "avg_win_inr": round(avg_win, 2),
         "avg_loss_inr": round(avg_loss, 2),
         "profit_factor": round(profit_factor, 2) if profit_factor != float("inf") else "inf (no losing trades)",
+        "expectancy_inr": round(expectancy, 2),
+
+        "average_holding_days": round(avg_holding, 2),
+
+        "largest_win_inr": round(largest_win, 2),
+
+        "largest_loss_inr": round(largest_loss, 2),
+
+        "max_consecutive_losses": max_consecutive_losses,
+
+        "recovery_factor": round(recovery_factor, 2)
+        if not np.isnan(recovery_factor)
+        else None,
     }
 
 
