@@ -1,0 +1,73 @@
+{
+  "metrics": {
+    "total_return_pct": -22.16,
+    "cagr_pct": -69.97,
+    "sharpe_ratio": 1.29,
+    "sortino_ratio": 2.26,
+    "max_drawdown_pct": -65.33,
+    "calmar_ratio": -1.07,
+    "n_trades": 390,
+    "win_rate_pct": 26.41,
+    "avg_win_inr": 187.11,
+    "avg_loss_inr": -303.01,
+    "profit_factor": 0.22
+  },
+  "monte_carlo": {
+    "n_simulations": 1000,
+    "median_terminal_equity": 432309.59,
+    "p5_terminal_equity": 432309.59,
+    "p95_terminal_equity": 432309.59,
+    "median_max_drawdown_pct": -13.53,
+    "worst_case_max_drawdown_pct": -13.67
+  },
+  "walk_forward": [
+    {
+      "total_return_pct": -3.63,
+      "cagr_pct": -64.59,
+      "sharpe_ratio": 3.65,
+      "sortino_ratio": 6.74,
+      "max_drawdown_pct": -52.4,
+      "calmar_ratio": -1.23,
+      "n_trades": 102,
+      "win_rate_pct": 29.41,
+      "avg_win_inr": 172.78,
+      "avg_loss_inr": -324.08,
+      "profit_factor": 0.22,
+      "fold": 0,
+      "test_start": "2026-06-03",
+      "test_end": "2026-06-16"
+    },
+    {
+      "total_return_pct": -2.77,
+      "cagr_pct": -51.97,
+      "sharpe_ratio": 1.5,
+      "sortino_ratio": 2.65,
+      "max_drawdown_pct": -53.14,
+      "calmar_ratio": -0.98,
+      "n_trades": 65,
+      "win_rate_pct": 13.85,
+      "avg_win_inr": 170.07,
+      "avg_loss_inr": -274.97,
+      "profit_factor": 0.1,
+      "fold": 1,
+      "test_start": "2026-06-17",
+      "test_end": "2026-07-01"
+    },
+    {
+      "total_return_pct": -1.12,
+      "cagr_pct": -27.02,
+      "sharpe_ratio": 1.81,
+      "sortino_ratio": 2.73,
+      "max_drawdown_pct": -59.99,
+      "calmar_ratio": -0.45,
+      "n_trades": 55,
+      "win_rate_pct": 38.18,
+      "avg_win_inr": 302.19,
+      "avg_loss_inr": -350.69,
+      "profit_factor": 0.53,
+      "fold": 2,
+      "test_start": "2026-07-02",
+      "test_end": "2026-07-15"
+    }
+  ]
+}
